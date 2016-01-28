@@ -1,30 +1,33 @@
-import asyncio
+from . import connectors
+from . import listeners
 
-from .listener import TcpListener
 
+class H2mqProtocol:
+    def connection_made(self, h2conn):
+        pass
 
-class H2mqProtocol(asyncio.Protocol):
-    def data_received(self, data):
-        super().data_received(data)
-
-    def eof_received(self):
-        super().eof_received()
-
-    def connection_made(self, transport):
-        super().connection_made(transport)
+    def connection_lost(self, h2conn):
+        pass
 
     def pause_writing(self):
-        super().pause_writing()
-
-    def connection_lost(self, exc):
-        super().connection_lost(exc)
+        pass
 
     def resume_writing(self):
-        super().resume_writing()
+        pass
 
     def frame_received(self, frame):
         pass
 
-    def listener_factory(self, proto):
+    @classmethod
+    def listener_factory(cls, proto):
         if proto == 'tcp':
-            return TcpListener
+            return listeners.TcpListener
+        elif proto == 'ipc':
+            return listeners.UnixListener
+
+    @classmethod
+    def connector_factory(cls, proto):
+        if proto == 'tcp':
+            return connectors.TcpConnector
+        elif proto == 'ipc':
+            return connectors.UnixConnector

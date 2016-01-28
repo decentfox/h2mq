@@ -3,3 +3,5 @@ def parse_endpoint(endpoint: str) -> tuple:
     if proto == 'tcp':
         host, port = addr.split(':', 1)
         return proto, (host, port)
+    elif proto == 'ipc':
+        return proto, addr
