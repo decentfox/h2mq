@@ -16,8 +16,8 @@ class TcpConnector(StreamConnector):
         self._host, self._port = address
 
     async def _open(self):
-        return await self._loop.create_connection(
-            lambda: H2Protocol(self, True), self._host, self._port)[1]
+        return (await self._loop.create_connection(
+            lambda: H2Protocol(self, True), self._host, self._port))[0]
 
 
 class UnixConnector(StreamConnector):
@@ -26,5 +26,5 @@ class UnixConnector(StreamConnector):
         self._path = address
 
     async def _open(self):
-        return await self._loop.create_unix_connection(
-            lambda: H2Protocol(self, True), self._path)[1]
+        return (await self._loop.create_unix_connection(
+            lambda: H2Protocol(self, True), self._path))[0]

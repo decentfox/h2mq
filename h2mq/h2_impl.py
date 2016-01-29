@@ -1,7 +1,11 @@
 import abc
 import asyncio
+from asyncio.locks import Semaphore
+from collections import deque
 
 from h2.connection import H2Connection
+
+from .stream import Stream
 
 
 class Supervisor(metaclass=abc.ABCMeta):
@@ -14,6 +18,10 @@ class Supervisor(metaclass=abc.ABCMeta):
     @property
     def loop(self):
         return self._loop
+
+    @property
+    def h2mq_transport(self):
+        return self._h2mq_transport
 
     async def open(self):
         if not self._opening:
@@ -46,7 +54,9 @@ class Supervisor(metaclass=abc.ABCMeta):
         pass
 
     def _reopen(self, *args, **kwargs):
-        self._loop.create_task(self._reopen_task(*args, **kwargs))
+        if self._opening:
+            self._loop.create_task(self._reopen_task(
+                *args, **kwargs))._log_destroy_pending = False
 
     async def _reopen_task(self, *args, **kwargs):
         while self._opening:
@@ -68,6 +78,8 @@ class H2Protocol(asyncio.Protocol):
         self._conn = H2Connection(client_side=client_side)
         self._transport = None
         self._last_active = 0
+        self._streams = deque()
+        self._streams_semaphore = Semaphore(16384)
 
     def connection_made(self, transport: asyncio.Transport):
         self._transport = transport
@@ -77,6 +89,7 @@ class H2Protocol(asyncio.Protocol):
         self._supervisor.connection_made(self)
 
     def connection_lost(self, exc):
+        self._conn.close_connection()
         self._supervisor.connection_lost(self)
 
     def data_received(self, data: bytes):
@@ -88,5 +101,20 @@ class H2Protocol(asyncio.Protocol):
             self._supervisor.event_received(event)
             self._transport.write(self._conn.data_to_send())
 
-    # def send(self, data):
-    #     self._conn.
+    @property
+    def h2_conn(self):
+        return self._conn
+
+    def borrow_stream(self, headers):
+        return Stream(self, headers)
+
+    async def borrow_stream_id(self):
+        await self._streams_semaphore.acquire()
+        if self._streams:
+            return self._streams.popleft()
+        else:
+            return self._conn.get_next_available_stream_id()
+
+    def return_stream_id(self, stream_id):
+        self._streams.append(stream_id)
+        self._streams_semaphore.release()

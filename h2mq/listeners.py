@@ -1,3 +1,5 @@
+import os
+
 from .h2_impl import H2Protocol, Supervisor
 
 
@@ -33,3 +35,6 @@ class UnixListener(StreamListener):
             lambda: H2Protocol(self, False), self._path)
         self._reopen(server)
         return server
+
+    def __del__(self):
+        os.remove(self._path)
