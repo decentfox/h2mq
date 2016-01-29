@@ -6,15 +6,18 @@ class Stream:
 
     async def __aenter__(self):
         self._stream_id = await self._h2_protocol.borrow_stream_id()
-        self._conn.send_headers(self._stream_id, self._headers)
-        self._headers = None
+        self.send_headers(self._headers)
+        del self._headers
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         self._h2_protocol.return_stream_id(self._stream_id)
-        self._h2_protocol = None
-        self._conn = None
-        self._stream_id = None
+        del self._h2_protocol
+        del self._conn
+        del self._stream_id
+
+    def send_headers(self, headers):
+        self._conn.send_headers(self._stream_id, headers)
 
     def send_data(self, data):
         self._conn.send_data(self._stream_id, data)
