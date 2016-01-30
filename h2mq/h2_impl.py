@@ -1,7 +1,5 @@
 import abc
 import asyncio
-from asyncio.locks import Semaphore
-from collections import deque
 
 from h2.connection import H2Connection
 
@@ -78,8 +76,6 @@ class H2Protocol(asyncio.Protocol):
         self._conn = H2Connection(client_side=client_side)
         self._transport = None
         self._last_active = 0
-        self._streams = deque()
-        self._streams_semaphore = Semaphore(16384)
 
     def connection_made(self, transport: asyncio.Transport):
         self._transport = transport
@@ -105,16 +101,5 @@ class H2Protocol(asyncio.Protocol):
     def h2_conn(self):
         return self._conn
 
-    def borrow_stream(self, headers):
+    def new_stream(self, headers):
         return Stream(self, headers)
-
-    async def borrow_stream_id(self):
-        await self._streams_semaphore.acquire()
-        if self._streams:
-            return self._streams.popleft()
-        else:
-            return self._conn.get_next_available_stream_id()
-
-    def return_stream_id(self, stream_id):
-        self._streams.append(stream_id)
-        self._streams_semaphore.release()

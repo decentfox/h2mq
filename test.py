@@ -26,12 +26,12 @@ async def main():
     await conn.connect(endpoint)
 
     # async with await server.borrow_stream({'A': 1}) as s1:
-    async with await conn.borrow_stream({'B': 2}) as s2:
+    s2 = await server.new_stream({'B': 2})
             # for _ in range(256):
-        # s1.send_data(b'1 hello')
-        s2.send_data(b'2 hello')
-        # s1.send_headers(dict(c=3))
-        s2.send_headers(dict(d=4))
+    # s1.send_data(b'1 hello')
+    s2.send_data(b'2 hello')
+    # s1.send_headers(dict(c=3))
+    # s2.send_headers(dict(d=4))
 
     await waiter
     await asyncio.sleep(0.1)

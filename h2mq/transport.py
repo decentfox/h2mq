@@ -31,7 +31,10 @@ class H2mqTransport:
         self._loop.call_soon(self._protocol.connection_made, h2_protocol)
 
     def connection_lost(self, h2_protocol):
-        self._peers.remove(h2_protocol)
+        try:
+            self._peers.remove(h2_protocol)
+        except ValueError:
+            pass
         if not self._peers:
             self._peers_not_empty.clear()
         self._protocol.connection_lost(h2_protocol)
@@ -61,8 +64,9 @@ class H2mqTransport:
         if connector is not None:
             await connector.close()
 
-    async def borrow_stream(self, headers):
+    async def new_stream(self, headers):
         await self._peers_not_empty.wait()
         peer = self._peers.popleft()
         self._peers.append(peer)
-        return peer.borrow_stream(headers)
+        # TODO: handle NoAvailableStreamIDError here
+        return peer.new_stream(headers)
