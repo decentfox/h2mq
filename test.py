@@ -16,7 +16,8 @@ async def main():
         def __init__(self, label):
             self.label = label
 
-        def frame_received(self, frame, stream=None):
+        def event_received(self, frame, stream=None):
+            print(frame)
             if isinstance(frame, RequestReceived):
                 print(self.label, 'REQ', frame.stream_id, frame.headers)
             elif isinstance(frame, DataReceived):

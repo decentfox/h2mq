@@ -81,8 +81,8 @@ class H2Protocol(asyncio.Protocol):
         self._transport = transport
         self._last_active = self._loop.time()
         self._conn.initiate_connection()
-        self._transport.write(self._conn.data_to_send())
         self._supervisor.connection_made(self)
+        self.send_data_to_send()
 
     def connection_lost(self, exc):
         self._conn.close_connection()
@@ -91,7 +91,7 @@ class H2Protocol(asyncio.Protocol):
     def data_received(self, data: bytes):
         self._last_active = self._loop.time()
         events = self._conn.receive_data(data)
-        self._transport.write(self._conn.data_to_send())
+        self.send_data_to_send()
 
         for event in events:
             stream_id = getattr(event, 'stream_id', None)
@@ -99,7 +99,7 @@ class H2Protocol(asyncio.Protocol):
             if stream_id is not None:
                 stream = self.get_stream(stream_id=stream_id)
             self._supervisor.event_received(event, stream=stream)
-            self._transport.write(self._conn.data_to_send())
+            self.send_data_to_send()
 
     @property
     def h2_conn(self):
@@ -107,3 +107,6 @@ class H2Protocol(asyncio.Protocol):
 
     def get_stream(self, headers=None, stream_id=None):
         return Stream(self, headers=headers, stream_id=stream_id)
+
+    def send_data_to_send(self):
+        self._transport.write(self._conn.data_to_send())

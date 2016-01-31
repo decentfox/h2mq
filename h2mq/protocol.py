@@ -15,7 +15,7 @@ class H2mqProtocol:
     def resume_writing(self):
         pass
 
-    def frame_received(self, frame, stream=None):
+    def event_received(self, frame, stream=None):
         pass
 
     @classmethod
