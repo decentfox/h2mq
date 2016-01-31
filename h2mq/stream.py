@@ -15,3 +15,7 @@ class Stream:
     def send_data(self, data, end_stream=False):
         self._conn.send_data(self._stream_id, data, end_stream=end_stream)
         self._h2_protocol.send_data_to_send()
+
+    def send_eof(self):
+        self._conn.end_stream(self._stream_id)
+        self._h2_protocol.send_data_to_send()
