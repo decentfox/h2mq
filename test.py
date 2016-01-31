@@ -1,7 +1,9 @@
 import asyncio
 import uuid
 
-from h2.events import RequestReceived, DataReceived
+from h2.events import RequestReceived, DataReceived, ResponseReceived, \
+    StreamEnded
+from h2.exceptions import StreamClosedError
 
 import h2mq
 
@@ -11,30 +13,37 @@ async def main():
     waiter = asyncio.Future()
 
     class MyProtocol(h2mq.H2mqProtocol):
-        def frame_received(self, frame):
-            if isinstance(frame, RequestReceived):
-                print(frame.headers)
-                if not waiter.done():
-                    waiter.set_result(None)
-            elif isinstance(frame, DataReceived):
-                print(frame.data)
+        def __init__(self, label):
+            self.label = label
 
-    server = h2mq.create_h2mq_connection(lambda: MyProtocol())
+        def frame_received(self, frame, stream=None):
+            if isinstance(frame, RequestReceived):
+                print(self.label, 'REQ', frame.stream_id, frame.headers)
+            elif isinstance(frame, DataReceived):
+                print(self.label, 'DATA', frame.stream_id, frame.data)
+            elif isinstance(frame, StreamEnded):
+                print(self.label, 'END', frame.stream_id)
+                try:
+                    stream.send_headers({':status': '200'})
+                    stream.send_data(b'yes')
+                    stream.send_data(b'sir', end_stream=True)
+                except StreamClosedError:
+                    if not waiter.done():
+                        waiter.set_result(None)
+            elif isinstance(frame, ResponseReceived):
+                print(self.label, 'RESP', frame.stream_id, frame.headers)
+
+    server = h2mq.create_h2mq_connection(lambda: MyProtocol('S'))
     await server.bind(endpoint)
 
-    conn = h2mq.create_h2mq_connection(lambda: MyProtocol())
+    conn = h2mq.create_h2mq_connection(lambda: MyProtocol('C'))
     await conn.connect(endpoint)
 
-    # async with await server.borrow_stream({'A': 1}) as s1:
-    s2 = await server.new_stream({'B': 2})
-            # for _ in range(256):
-    # s1.send_data(b'1 hello')
+    s2 = await server.create_stream({':method': 'get'})
     s2.send_data(b'2 hello')
-    # s1.send_headers(dict(c=3))
-    # s2.send_headers(dict(d=4))
+    s2.send_data(b'2 world', end_stream=True)
 
     await waiter
-    await asyncio.sleep(0.1)
 
     await conn.disconnect(endpoint)
     await server.unbind(endpoint)

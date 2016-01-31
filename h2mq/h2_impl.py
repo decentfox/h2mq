@@ -65,8 +65,8 @@ class Supervisor(metaclass=abc.ABCMeta):
             except Exception:
                 await asyncio.sleep(0.618)
 
-    def event_received(self, event):
-        self._h2mq_transport.event_received(event)
+    def event_received(self, event, stream=None):
+        self._h2mq_transport.event_received(event, stream=stream)
 
 
 class H2Protocol(asyncio.Protocol):
@@ -94,12 +94,16 @@ class H2Protocol(asyncio.Protocol):
         self._transport.write(self._conn.data_to_send())
 
         for event in events:
-            self._supervisor.event_received(event)
+            stream_id = getattr(event, 'stream_id', None)
+            stream = None
+            if stream_id is not None:
+                stream = self.get_stream(stream_id=stream_id)
+            self._supervisor.event_received(event, stream=stream)
             self._transport.write(self._conn.data_to_send())
 
     @property
     def h2_conn(self):
         return self._conn
 
-    def new_stream(self, headers):
-        return Stream(self, headers)
+    def get_stream(self, headers=None, stream_id=None):
+        return Stream(self, headers=headers, stream_id=stream_id)

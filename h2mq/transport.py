@@ -39,8 +39,8 @@ class H2mqTransport:
             self._peers_not_empty.clear()
         self._protocol.connection_lost(h2_protocol)
 
-    def event_received(self, event):
-        self._protocol.frame_received(event)
+    def event_received(self, event, stream=None):
+        self._protocol.frame_received(event, stream=stream)
 
     async def bind(self, endpoint: str):
         proto, address = parse_endpoint(endpoint)
@@ -64,9 +64,9 @@ class H2mqTransport:
         if connector is not None:
             await connector.close()
 
-    async def new_stream(self, headers):
+    async def create_stream(self, headers):
         await self._peers_not_empty.wait()
         peer = self._peers.popleft()
         self._peers.append(peer)
         # TODO: handle NoAvailableStreamIDError here
-        return peer.new_stream(headers)
+        return peer.get_stream(headers)
