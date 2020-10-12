@@ -8,14 +8,15 @@ from .utils import parse_endpoint
 
 class H2mqTransport:
     def __init__(self, protocol: H2mqProtocol, *, loop=None):
-        self._protocol = protocol
-        self._listeners = {}
-        self._connectors = {}
-        self._peers = deque()
-        self._peers_not_empty = Event()
         if loop is None:
             loop = asyncio.get_event_loop()
         self._loop = loop
+        self._protocol = protocol
+        self._listeners = {}
+        self._connectors = {}
+        self._conns = deque()
+        self._conns_not_empty = Event(loop=loop)
+        self._requests = asyncio.Queue(loop=loop)
 
     @property
     def loop(self):
@@ -25,22 +26,25 @@ class H2mqTransport:
     def protocol(self):
         return self._protocol
 
-    def connection_made(self, h2_protocol):
-        self._peers.append(h2_protocol)
-        self._peers_not_empty.set()
+    def add_protocol(self, h2_protocol):
+        self._conns.append(h2_protocol)
+        self._conns_not_empty.set()
         self._loop.call_soon(self._protocol.connection_made, h2_protocol)
 
-    def connection_lost(self, h2_protocol):
+    def del_protocol(self, h2_protocol):
         try:
-            self._peers.remove(h2_protocol)
+            self._conns.remove(h2_protocol)
         except ValueError:
             pass
-        if not self._peers:
-            self._peers_not_empty.clear()
+        if not self._conns:
+            self._conns_not_empty.clear()
         self._protocol.connection_lost(h2_protocol)
 
-    def event_received(self, event, stream=None):
-        self._protocol.event_received(event, stream=stream)
+    def feed_event(self, event):
+        self._protocol.event_received(event)
+
+    def feed_request(self, request):
+        self._requests.put_nowait(request)
 
     async def bind(self, endpoint: str):
         proto, address = parse_endpoint(endpoint)
@@ -64,9 +68,18 @@ class H2mqTransport:
         if connector is not None:
             await connector.close()
 
-    async def create_stream(self, headers):
-        await self._peers_not_empty.wait()
-        peer = self._peers.popleft()
-        self._peers.append(peer)
+    async def create_stream(self, headers, end_stream=False):
+        await self._conns_not_empty.wait()
+        conn = self._conns.popleft()
+        self._conns.append(conn)
         # TODO: handle NoAvailableStreamIDError here
-        return peer.get_stream(headers)
+        return conn.get_stream(headers, end_stream=end_stream)
+
+    async def next_connection(self):
+        await self._conns_not_empty.wait()
+        conn = self._conns.popleft()
+        self._conns.append(conn)
+        return conn
+
+    async def recv_request(self):
+        return await self._requests.get()
